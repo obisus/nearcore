@@ -3289,6 +3289,7 @@ dependencies = [
  "near-primitives",
  "near-store",
  "near-telemetry",
+ "near-tokio-util",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -3305,10 +3306,14 @@ version = "0.1.0"
 dependencies = [
  "actix",
  "actix-rt",
+ "bitflags",
+ "bytes",
  "futures",
  "log",
  "once_cell",
  "strum",
+ "tokio",
+ "tokio-util 0.2.0",
 ]
 
 [[package]]
@@ -3474,6 +3479,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "near-tokio-util"
+version = "0.2.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "near-performance-metrics",
+ "pin-project-lite 0.1.11",
+ "tokio",
+ "tokio-test",
+]
+
+[[package]]
 name = "near-vm-errors"
 version = "2.3.0"
 dependencies = [
@@ -3556,6 +3576,7 @@ dependencies = [
  "near-network",
  "near-primitives",
  "near-store",
+ "near-tokio-util",
  "neard",
  "node-runtime",
  "openssl-probe",
@@ -5570,6 +5591,17 @@ dependencies = [
  "rustls",
  "tokio",
  "webpki",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed0049c119b6d505c4447f5c64873636c7af6c75ab0d45fd9f618d82acb8016d"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "tokio",
 ]
 
 [[package]]

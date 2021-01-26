@@ -1,22 +1,26 @@
+use bytes::Buf;
+use bytes::BufMut;
+use futures;
+use futures::task::Context;
 use log::{info, warn};
+use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
-
-use futures;
-use futures::task::Context;
-use once_cell::sync::Lazy;
-use std::pin::Pin;
 use strum::AsStaticRef;
+use tokio::io;
+use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 
 pub static NTHREADS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) const SLOW_CALL_THRESHOLD: Duration = Duration::from_millis(500);
-const MIN_OCCUPANCY_RATIO_THRESHOLD: f64 = 0.02;
+pub(crate) const SLOW_HALF: Duration = Duration::from_millis(50);
+const MIN_OCCUPANCY_RATIO_THRESHOLD: f64 = 0.001;
 
 pub(crate) static STATS: Lazy<Arc<Mutex<Stats>>> = Lazy::new(|| Arc::new(Mutex::new(Stats::new())));
 pub(crate) static REF_COUNTER: Lazy<Mutex<HashMap<(&'static str, u32), u128>>> =
@@ -231,6 +235,132 @@ pub fn print_performance_stats(sleep_time: Duration) {
     for entry in REF_COUNTER.lock().unwrap().iter() {
         if *entry.1 > 0 {
             info!("    future {}:{} {}", (entry.0).0, (entry.0).1, entry.1);
+        }
+    }
+}
+
+pub struct NearReadHalf<T> {
+    pub inner: ReadHalf<T>,
+}
+
+pub struct NearWriteHalf<T> {
+    pub inner: WriteHalf<T>,
+}
+
+impl<T: AsyncRead> AsyncRead for NearReadHalf<T> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<tokio::io::Result<usize>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        //    let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_read(cx, buf);
+        //   let took = now.elapsed();
+        //   STATS.lock().unwrap().log("ReadHalf", "poll_read", 0, took);
+        //   maybe_print_warning(took, "poll_read");
+        res
+    }
+
+    fn poll_read_buf<B: BufMut>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut B,
+    ) -> Poll<tokio::io::Result<usize>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        //let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_read_buf(cx, buf);
+        // let took = now.elapsed();
+        //  STATS.lock().unwrap().log("ReadHalf", "poll_read_buf", 0, took);
+        // maybe_print_warning(took, "poll_read_buf");
+        res
+    }
+}
+
+impl<T: AsyncWrite> AsyncWrite for NearWriteHalf<T> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        //    let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_write(cx, buf);
+        //     let took = now.elapsed();
+        //  STATS.lock().unwrap().log("WriteHalf", "poll_write", 0, took);
+        //    maybe_print_warning(took, "poll_write");
+        res
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        //    let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_flush(cx);
+        //   let took = now.elapsed();
+        //   STATS.lock().unwrap().log("WriteHalf", "poll_flush", 0, took);
+        //     maybe_print_warning(took, "poll_flush");
+        res
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        //   let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_shutdown(cx);
+        //   let took = now.elapsed();
+        //   STATS.lock().unwrap().log("WriteHalf", "poll_shutdown", 0, took);
+        //   maybe_print_warning(took, "poll_shutdown");
+        res
+    }
+
+    fn poll_write_buf<B: Buf>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut B,
+    ) -> Poll<Result<usize, io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        // let now = Instant::now();
+        let res = unsafe { Pin::new_unchecked(&mut this.inner) }.poll_write_buf(cx, buf);
+        //let took = now.elapsed();
+        // STATS.lock().unwrap().log("WriteHalf", "poll_write_buf", 0, took);
+        // maybe_print_warning(took, "poll_write_buf");
+        res
+    }
+}
+
+fn maybe_print_warning(took: Duration, func_name: &str) {
+    if took > SLOW_HALF {
+        warn!(
+            "Function exceeded time limit {}:{} took: {}ms",
+            func_name,
+            TID.with(|x| *x.borrow()),
+            took.as_millis(),
+        );
+    }
+}
+
+pub struct MeasurePerf {
+    class_name: &'static str,
+    msg: &'static str,
+    started: Instant,
+}
+
+impl MeasurePerf {
+    pub fn new(class_name: &'static str, msg: &'static str) -> Self {
+        Self { class_name, msg, started: Instant::now() }
+    }
+
+    pub fn done(self) {
+        let elapsed = Instant::now() - self.started;
+        STATS.lock().unwrap().log(self.class_name, self.msg, 0, elapsed);
+        if elapsed > Duration::from_millis(10) {
+            info!(target: "MeasurePerf", "Took {:?} processing {}", elapsed, self.msg);
+            maybe_print_warning(elapsed, self.msg);
         }
     }
 }
