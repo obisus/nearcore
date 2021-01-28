@@ -3337,6 +3337,7 @@ dependencies = [
  "near-telemetry",
  "rand 0.7.3",
  "serde",
+ "serde_json",
  "strum",
  "tempfile",
  "tokio",
