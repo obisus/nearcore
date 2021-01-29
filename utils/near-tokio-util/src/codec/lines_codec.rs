@@ -64,13 +64,13 @@ impl LinesCodec {
     ///
     /// ```
     /// use std::usize;
-    /// use near_tokio_util::codec::LinesCodec;
+    /// use tokio_util::codec::LinesCodec;
     ///
     /// let codec = LinesCodec::new();
     /// assert_eq!(codec.max_length(), usize::MAX);
     /// ```
     /// ```
-    /// use near_tokio_util::codec::LinesCodec;
+    /// use tokio_util::codec::LinesCodec;
     ///
     /// let codec = LinesCodec::new_with_max_length(256);
     /// assert_eq!(codec.max_length(), 256);

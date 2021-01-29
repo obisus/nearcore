@@ -1,6 +1,6 @@
-use near_tokio_util::codec::{Decoder, Encoder};
-use near_tokio_util::udp::UdpFramed;
 use tokio::net::UdpSocket;
+use tokio_util::codec::{Decoder, Encoder};
+use tokio_util::udp::UdpFramed;
 
 use bytes::{BufMut, BytesMut};
 use futures::future::try_join;

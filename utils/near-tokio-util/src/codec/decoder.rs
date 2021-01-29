@@ -75,7 +75,7 @@ pub trait Decoder {
     /// # use std::io;
     /// #
     /// # use bytes::BytesMut;
-    /// # use near_tokio_util::codec::Decoder;
+    /// # use tokio_util::codec::Decoder;
     /// #
     /// # struct MyCodec;
     /// #

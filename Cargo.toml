@@ -69,7 +69,7 @@ near-crypto = { path = "./core/crypto" }
 near-primitives = { path = "./core/primitives" }
 near-store = { path = "./core/store" }
 runtime-params-estimator = { path = "./runtime/runtime-params-estimator", default_features = false }
-near-tokio-util = { path = "utils/near-tokio-util" }
+near-tokio-util = { path = "utils/near-tokio-util", package = "tokio-util" }
 
 node-runtime = { path = "./runtime/runtime" }
 

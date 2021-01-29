@@ -1,11 +1,11 @@
 #![warn(rust_2018_idioms)]
 
-use near_tokio_util::codec::*;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_test::task;
 use tokio_test::{
     assert_err, assert_ok, assert_pending, assert_ready, assert_ready_err, assert_ready_ok,
 };
+use tokio_util::codec::*;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{pin_mut, Sink, Stream};

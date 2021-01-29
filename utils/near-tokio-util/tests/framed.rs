@@ -1,8 +1,8 @@
 #![warn(rust_2018_idioms)]
 
-use near_tokio_util::codec::{Decoder, Encoder, Framed, FramedParts};
 use tokio::prelude::*;
 use tokio_test::assert_ok;
+use tokio_util::codec::{Decoder, Encoder, Framed, FramedParts};
 
 use bytes::{Buf, BufMut, BytesMut};
 use futures::StreamExt;

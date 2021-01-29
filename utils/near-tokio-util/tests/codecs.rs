@@ -1,6 +1,6 @@
 #![warn(rust_2018_idioms)]
 
-use near_tokio_util::codec::{BytesCodec, Decoder, Encoder, LinesCodec};
+use tokio_util::codec::{BytesCodec, Decoder, Encoder, LinesCodec};
 
 use bytes::{BufMut, Bytes, BytesMut};
 

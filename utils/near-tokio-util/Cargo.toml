@@ -12,7 +12,7 @@
 
 [package]
 edition = "2018"
-name = "near-tokio-util"
+name = "tokio-util"
 version = "0.2.0"
 authors = ["Tokio Contributors <team@tokio.rs>"]
 description = "Additional utilities for working with Tokio.\n"

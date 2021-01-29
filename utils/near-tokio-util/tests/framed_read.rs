@@ -1,9 +1,9 @@
 #![warn(rust_2018_idioms)]
 
-use near_tokio_util::codec::{Decoder, FramedRead};
 use tokio::io::AsyncRead;
 use tokio_test::assert_ready;
 use tokio_test::task;
+use tokio_util::codec::{Decoder, FramedRead};
 
 use bytes::{Buf, BytesMut};
 use futures::Stream;
@@ -194,7 +194,7 @@ fn huge_size() {
             if buf.len() < 32 * 1024 {
                 return Ok(None);
             }
-            buf.split_to(32 * 1024);
+            let _ = buf.split_to(32 * 1024);
             Ok(Some(0))
         }
     }

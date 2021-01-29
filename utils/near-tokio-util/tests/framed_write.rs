@@ -1,8 +1,8 @@
 #![warn(rust_2018_idioms)]
 
-use near_tokio_util::codec::{Encoder, FramedWrite};
 use tokio::io::AsyncWrite;
 use tokio_test::{assert_ready, task};
+use tokio_util::codec::{Encoder, FramedWrite};
 
 use bytes::{BufMut, BytesMut};
 use futures_sink::Sink;
