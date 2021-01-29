@@ -62,7 +62,14 @@ impl ThreadStats {
         self.in_progress_since = Some(now);
     }
 
-    pub fn log(&mut self, class_name: &'static str, msg: &'static str, line: u32, took: Duration, now: Instant) {
+    pub fn log(
+        &mut self,
+        class_name: &'static str,
+        msg: &'static str,
+        line: u32,
+        took: Duration,
+        now: Instant,
+    ) {
         self.in_progress_since = None;
 
         let took_reduced = min(took, now - self.last_check);
@@ -147,7 +154,11 @@ impl Stats {
     }
 
     fn print_stats(&mut self, sleep_time: Duration) {
-        info!("Performance stats {} threads (min ratio = {})", self.stats.len(), MIN_OCCUPANCY_RATIO_THRESHOLD);
+        info!(
+            "Performance stats {} threads (min ratio = {})",
+            self.stats.len(),
+            MIN_OCCUPANCY_RATIO_THRESHOLD
+        );
         let mut s: Vec<_> = self.stats.iter().collect();
         s.sort_by(|x, y| (*x).0.cmp(&(*y).0));
 
