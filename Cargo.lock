@@ -3190,6 +3190,7 @@ dependencies = [
  "libsecp256k1",
  "lunarity-lexer",
  "near-crypto",
+ "near-primitives",
  "near-runtime-fees",
  "near-runtime-utils",
  "near-vm-errors",
