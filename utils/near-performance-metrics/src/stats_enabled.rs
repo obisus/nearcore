@@ -5,7 +5,7 @@ use futures::task::Context;
 use log::{info, warn};
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,7 +20,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 pub static NTHREADS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) const SLOW_CALL_THRESHOLD: Duration = Duration::from_millis(500);
 pub(crate) const SLOW_HALF: Duration = Duration::from_millis(50);
-const MIN_OCCUPANCY_RATIO_THRESHOLD: f64 = 0.001;
+const MIN_OCCUPANCY_RATIO_THRESHOLD: f64 = 0.03;
 
 pub(crate) static STATS: Lazy<Arc<Mutex<Stats>>> = Lazy::new(|| Arc::new(Mutex::new(Stats::new())));
 pub(crate) static REF_COUNTER: Lazy<Mutex<HashMap<(&'static str, u32), u128>>> =
@@ -42,30 +42,51 @@ pub struct ThreadStats {
     cnt: u128,
     time: Duration,
     classes: HashSet<&'static str>,
+    in_progress_since: Option<Instant>,
+    last_check: Instant,
 }
 
 impl ThreadStats {
     fn new() -> Self {
-        Self { stat: HashMap::new(), cnt: 0, time: Duration::default(), classes: HashSet::new() }
+        Self {
+            stat: HashMap::new(),
+            cnt: 0,
+            time: Duration::default(),
+            classes: HashSet::new(),
+            in_progress_since: None,
+            last_check: Instant::now(),
+        }
     }
 
-    pub fn log(&mut self, class_name: &'static str, msg: &'static str, line: u32, took: Duration) {
+    pub fn pre_log(&mut self, now: Instant) {
+        self.in_progress_since = Some(now);
+    }
+
+    pub fn log(&mut self, class_name: &'static str, msg: &'static str, line: u32, took: Duration, now: Instant) {
+        self.in_progress_since = None;
+
+        let took_reduced = min(took, now - self.last_check);
+
         let entry = self.stat.entry((msg, line)).or_insert_with(|| Entry {
             cnt: 0,
             time: Duration::default(),
             max_time: Duration::default(),
         });
         entry.cnt += 1;
-        entry.time += took;
+        entry.time += took_reduced;
         entry.max_time = max(took, entry.max_time);
 
         self.cnt += 1;
-        self.time += took;
+        self.time += took_reduced;
         self.classes.insert(class_name);
     }
 
-    fn print_stats(&self, tid: usize, sleep_time: Duration) -> f64 {
-        let ratio = (self.time.as_nanos() as f64) / (sleep_time.as_nanos() as f64);
+    fn print_stats_and_clear(&mut self, tid: usize, sleep_time: Duration, now: Instant) -> f64 {
+        let mut ratio = self.time.as_nanos() as f64;
+        if let Some(in_progress_since) = self.in_progress_since {
+            ratio += (now - max(in_progress_since, self.last_check)).as_nanos() as f64;
+        }
+        ratio /= sleep_time.as_nanos() as f64;
 
         if ratio > MIN_OCCUPANCY_RATIO_THRESHOLD {
             let class_name = format!("{:?}", self.classes);
@@ -91,7 +112,16 @@ impl ThreadStats {
                 );
             }
         }
+        self.last_check = now;
+        self.clear();
+
         ratio
+    }
+
+    fn clear(&mut self) {
+        self.time = Duration::default();
+        self.cnt = 0;
+        self.stat.clear();
     }
 }
 
@@ -114,20 +144,20 @@ impl Stats {
         let entry =
             self.stats.entry(tid).or_insert_with(|| Arc::new(Mutex::new(ThreadStats::new())));
         entry.clone()
-        //    entry.log(class_name, msg, line, took)
     }
 
     fn print_stats(&mut self, sleep_time: Duration) {
-        info!("Performance stats {} threads", self.stats.len());
+        info!("Performance stats {} threads (min ratio = {})", self.stats.len(), MIN_OCCUPANCY_RATIO_THRESHOLD);
         let mut s: Vec<_> = self.stats.iter().collect();
         s.sort_by(|x, y| (*x).0.cmp(&(*y).0));
 
         let mut ratio = 0.0;
+        let now = Instant::now();
         for entry in s {
-            ratio += entry.1.lock().unwrap().print_stats(*entry.0, sleep_time);
+            ratio += entry.1.lock().unwrap().print_stats_and_clear(*entry.0, sleep_time, now);
         }
         info!("sum ratio = {}", ratio);
-        self.stats.clear();
+        // self.stats.clear();
     }
 }
 
@@ -164,7 +194,10 @@ pub fn measure_performance_internal<F, Message, Result>(
 where
     F: FnOnce(Message) -> Result,
 {
+    let stat = STATS.lock().unwrap().get_entry();
+
     let now = Instant::now();
+    stat.lock().unwrap().pre_log(now);
     let result = f(msg);
 
     let took = now.elapsed();
@@ -179,8 +212,9 @@ where
             text_field
         );
     }
-    let stat = STATS.lock().unwrap().get_entry();
-    stat.lock().unwrap().log(class_name, std::any::type_name::<Message>(), 0, took);
+    let ended = Instant::now();
+    let took = ended - now;
+    stat.lock().unwrap().log(class_name, std::any::type_name::<Message>(), 0, took, ended);
     result
 }
 
@@ -203,11 +237,14 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
 
-        let now = Instant::now();
-        let res = unsafe { Pin::new_unchecked(&mut this.f) }.poll(cx);
-        let took = now.elapsed();
         let stat = STATS.lock().unwrap().get_entry();
-        stat.lock().unwrap().log(this.class_name, this.file, this.line, took);
+        let now = Instant::now();
+        stat.lock().unwrap().pre_log(now);
+
+        let res = unsafe { Pin::new_unchecked(&mut this.f) }.poll(cx);
+        let ended = Instant::now();
+        let took = ended - now;
+        stat.lock().unwrap().log(this.class_name, this.file, this.line, took, ended);
 
         if took > SLOW_CALL_THRESHOLD {
             warn!(
@@ -349,17 +386,21 @@ pub struct MeasurePerf {
     class_name: &'static str,
     msg: &'static str,
     started: Instant,
+    stat: Arc<Mutex<ThreadStats>>,
 }
 
 impl MeasurePerf {
     pub fn new(class_name: &'static str, msg: &'static str) -> Self {
-        Self { class_name, msg, started: Instant::now() }
+        let stat = STATS.lock().unwrap().get_entry();
+        let now = Instant::now();
+        stat.lock().unwrap().pre_log(now);
+        Self { class_name, msg, started: now, stat }
     }
 
     pub fn done(self) {
-        let elapsed = Instant::now() - self.started;
-        let stat = STATS.lock().unwrap().get_entry();
-        stat.lock().unwrap().log(self.class_name, self.msg, 0, elapsed);
+        let ended = Instant::now();
+        let elapsed = ended - self.started;
+        self.stat.lock().unwrap().log(self.class_name, self.msg, 0, elapsed, ended);
 
         if elapsed > Duration::from_millis(10) {
             info!(target: "MeasurePerf", "Took {:?} processing {}", elapsed, self.msg);
