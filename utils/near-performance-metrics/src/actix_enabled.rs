@@ -30,7 +30,8 @@ where
         f(a, b);
 
         let took = now.elapsed();
-        STATS.lock().unwrap().log("run_later", file, line, took);
+        let stat = STATS.lock().unwrap().get_entry();
+        stat.lock().unwrap().log("run_later", file, line, took);
         if took > SLOW_CALL_THRESHOLD {
             warn!(
                 "Slow function call {}:{} {}:{} took: {}ms",

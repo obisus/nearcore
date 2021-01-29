@@ -37,7 +37,7 @@ struct Entry {
     max_time: Duration,
 }
 
-struct ThreadStats {
+pub struct ThreadStats {
     stat: HashMap<(&'static str, u32), Entry>,
     cnt: u128,
     time: Duration,
@@ -49,7 +49,7 @@ impl ThreadStats {
         Self { stat: HashMap::new(), cnt: 0, time: Duration::default(), classes: HashSet::new() }
     }
 
-    fn log(&mut self, class_name: &'static str, msg: &'static str, line: u32, took: Duration) {
+    pub fn log(&mut self, class_name: &'static str, msg: &'static str, line: u32, took: Duration) {
         let entry = self.stat.entry((msg, line)).or_insert_with(|| Entry {
             cnt: 0,
             time: Duration::default(),
@@ -64,7 +64,7 @@ impl ThreadStats {
         self.classes.insert(class_name);
     }
 
-    fn print_stats(&self, tid: usize, sleep_time: Duration) {
+    fn print_stats(&self, tid: usize, sleep_time: Duration) -> f64 {
         let ratio = (self.time.as_nanos() as f64) / (sleep_time.as_nanos() as f64);
 
         if ratio > MIN_OCCUPANCY_RATIO_THRESHOLD {
@@ -91,11 +91,12 @@ impl ThreadStats {
                 );
             }
         }
+        ratio
     }
 }
 
 pub(crate) struct Stats {
-    stats: HashMap<usize, ThreadStats>,
+    stats: HashMap<usize, Arc<Mutex<ThreadStats>>>,
 }
 
 impl Stats {
@@ -103,21 +104,17 @@ impl Stats {
         Self { stats: HashMap::new() }
     }
 
-    pub(crate) fn log(
-        &mut self,
-        class_name: &'static str,
-        msg: &'static str,
-        line: u32,
-        took: Duration,
-    ) {
+    pub(crate) fn get_entry(&mut self) -> Arc<Mutex<ThreadStats>> {
         let tid = TID.with(|x| {
             if *x.borrow_mut() == 0 {
                 *x.borrow_mut() = NTHREADS.fetch_add(1, Ordering::SeqCst);
             }
             *x.borrow_mut()
         });
-        let entry = self.stats.entry(tid).or_insert_with(|| ThreadStats::new());
-        entry.log(class_name, msg, line, took)
+        let entry =
+            self.stats.entry(tid).or_insert_with(|| Arc::new(Mutex::new(ThreadStats::new())));
+        entry.clone()
+        //    entry.log(class_name, msg, line, took)
     }
 
     fn print_stats(&mut self, sleep_time: Duration) {
@@ -125,9 +122,11 @@ impl Stats {
         let mut s: Vec<_> = self.stats.iter().collect();
         s.sort_by(|x, y| (*x).0.cmp(&(*y).0));
 
+        let mut ratio = 0.0;
         for entry in s {
-            entry.1.print_stats(*entry.0, sleep_time);
+            ratio += entry.1.lock().unwrap().print_stats(*entry.0, sleep_time);
         }
+        info!("sum ratio = {}", ratio);
         self.stats.clear();
     }
 }
@@ -180,7 +179,8 @@ where
             text_field
         );
     }
-    STATS.lock().unwrap().log(class_name, std::any::type_name::<Message>(), 0, took);
+    let stat = STATS.lock().unwrap().get_entry();
+    stat.lock().unwrap().log(class_name, std::any::type_name::<Message>(), 0, took);
     result
 }
 
@@ -206,7 +206,8 @@ where
         let now = Instant::now();
         let res = unsafe { Pin::new_unchecked(&mut this.f) }.poll(cx);
         let took = now.elapsed();
-        STATS.lock().unwrap().log(this.class_name, this.file, this.line, took);
+        let stat = STATS.lock().unwrap().get_entry();
+        stat.lock().unwrap().log(this.class_name, this.file, this.line, took);
 
         if took > SLOW_CALL_THRESHOLD {
             warn!(
@@ -357,7 +358,9 @@ impl MeasurePerf {
 
     pub fn done(self) {
         let elapsed = Instant::now() - self.started;
-        STATS.lock().unwrap().log(self.class_name, self.msg, 0, elapsed);
+        let stat = STATS.lock().unwrap().get_entry();
+        stat.lock().unwrap().log(self.class_name, self.msg, 0, elapsed);
+
         if elapsed > Duration::from_millis(10) {
             info!(target: "MeasurePerf", "Took {:?} processing {}", elapsed, self.msg);
             maybe_print_warning(elapsed, self.msg);
