@@ -123,9 +123,9 @@ impl ThreadStats {
         self.clear();
 
         if ratio > MIN_OCCUPANCY_RATIO_THRESHOLD {
-            return (ratio, ratio)
-        } else {
             return (ratio, 0.0)
+        } else {
+            return (ratio, ratio)
         }
     }
 
@@ -179,7 +179,7 @@ impl Stats {
             ratio += cur_ratio;
             other_ratio += cur_other_ratio
         }
-        info!("Other threads ratio {}", other_ratio);
+        info!("    Other threads ratio {}", other_ratio);
         info!("Total ratio = {}", ratio);
         // self.stats.clear();
     }
