@@ -88,7 +88,7 @@ impl ThreadStats {
         self.classes.insert(class_name);
     }
 
-    fn print_stats_and_clear(&mut self, tid: usize, sleep_time: Duration, now: Instant) -> f64 {
+    fn print_stats_and_clear(&mut self, tid: usize, sleep_time: Duration, now: Instant) -> (f64, f64) {
         let mut ratio = self.time.as_nanos() as f64;
         if let Some(in_progress_since) = self.in_progress_since {
             ratio += (now - max(in_progress_since, self.last_check)).as_nanos() as f64;
@@ -122,7 +122,11 @@ impl ThreadStats {
         self.last_check = now;
         self.clear();
 
-        ratio
+        if ratio > MIN_OCCUPANCY_RATIO_THRESHOLD {
+            return (ratio, ratio)
+        } else {
+            return (ratio, 0.0)
+        }
     }
 
     fn clear(&mut self) {
@@ -168,11 +172,15 @@ impl Stats {
         s.sort_by(|x, y| (*x).0.cmp(&(*y).0));
 
         let mut ratio = 0.0;
+        let mut other_ratio = 0.0;
         let now = Instant::now();
         for entry in s {
-            ratio += entry.1.lock().unwrap().print_stats_and_clear(*entry.0, sleep_time, now);
+            let (cur_ratio, cur_other_ratio) = entry.1.lock().unwrap().print_stats_and_clear(*entry.0, sleep_time, now);
+            ratio += cur_ratio;
+            other_ratio += cur_other_ratio
         }
-        info!("sum ratio = {}", ratio);
+        info!("Other threads ratio {}", other_ratio);
+        info!("Total ratio = {}", ratio);
         // self.stats.clear();
     }
 }
