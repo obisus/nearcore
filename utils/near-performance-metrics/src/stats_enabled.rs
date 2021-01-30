@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
@@ -136,18 +136,23 @@ pub(crate) struct Stats {
     stats: HashMap<usize, Arc<Mutex<ThreadStats>>>,
 }
 
+pub fn get_tid() -> usize {
+    let res = TID.with(|t| {
+        if *t.borrow() == 0 {
+            *t.borrow_mut() = nix::unistd::gettid().as_raw() as usize;
+        }
+        *t.borrow()
+    });
+    res
+}
+
 impl Stats {
     fn new() -> Self {
         Self { stats: HashMap::new() }
     }
 
     pub(crate) fn get_entry(&mut self) -> Arc<Mutex<ThreadStats>> {
-        let tid = TID.with(|x| {
-            if *x.borrow_mut() == 0 {
-                *x.borrow_mut() = NTHREADS.fetch_add(1, Ordering::SeqCst);
-            }
-            *x.borrow_mut()
-        });
+        let tid = get_tid();
         let entry =
             self.stats.entry(tid).or_insert_with(|| Arc::new(Mutex::new(ThreadStats::new())));
         entry.clone()
