@@ -184,6 +184,14 @@ pub struct Peer {
     peer_counter: Arc<AtomicUsize>,
 }
 
+impl Drop for Peer {
+    fn drop(&mut self) {
+        eprintln!("will drop Peer");
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        eprintln!("did drop Peer");
+    }
+}
+
 impl Peer {
     pub fn new(
         node_info: PeerInfo,

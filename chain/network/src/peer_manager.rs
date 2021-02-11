@@ -154,6 +154,14 @@ pub struct PeerManagerActor {
     scheduled_routing_table_update: bool,
 }
 
+impl Drop for PeerManagerActor {
+    fn drop(&mut self) {
+        eprintln!("will drop PeerManagerActor");
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        eprintln!("did drop PeerManagerActor");
+    }
+}
+
 impl PeerManagerActor {
     pub fn new(
         store: Arc<Store>,
