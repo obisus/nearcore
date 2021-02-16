@@ -1649,31 +1649,26 @@ impl Handler<OutboundTcpConnect> for PeerManagerActor {
         if let Some(addr) = msg.peer_info.addr {
             tokio::time::timeout(Duration::from_secs(1), TcpStream::connect(addr))
                 .into_actor(self)
-                .then(move |res, act, ctx| match res {
-                    Ok(res) => match res {
-                        Ok(stream) => {
-                            debug!(target: "network", "Connecting to {}", msg.peer_info);
-                            let edge_info = act.propose_edge(msg.peer_info.id.clone(), None);
+                .map(move |res, act, ctx| match res {
+                    Ok(Ok(stream)) => {
+                        debug!(target: "network", "Connecting to {}", msg.peer_info);
+                        let edge_info = act.propose_edge(msg.peer_info.id.clone(), None);
 
-                            act.try_connect_peer(
-                                ctx.address(),
-                                stream,
-                                PeerType::Outbound,
-                                Some(msg.peer_info),
-                                Some(edge_info),
-                            );
-                            actix::fut::ready(())
-                        }
-                        Err(err) => {
-                            info!(target: "network", "Error connecting to {}: {}", addr, err);
-                            act.outgoing_peers.remove(&msg.peer_info.id);
-                            actix::fut::ready(())
-                        }
-                    },
-                    Err(err) => {
-                        info!(target: "network", "Error connecting to {}: {}", addr, err);
+                        act.try_connect_peer(
+                            ctx.address(),
+                            stream,
+                            PeerType::Outbound,
+                            Some(msg.peer_info),
+                            Some(edge_info),
+                        );
+                    }
+                    Err(timeout_err) => {
+                        info!(target: "network", "Error connecting to {}: {}", addr, timeout_err);
                         act.outgoing_peers.remove(&msg.peer_info.id);
-                        actix::fut::ready(())
+                    }
+                    Ok(Err(io_err)) => {
+                        info!(target: "network", "Error connecting to {}: {}", addr, io_err);
+                        act.outgoing_peers.remove(&msg.peer_info.id);
                     }
                 })
                 .wait(ctx);
