@@ -127,7 +127,7 @@ fn run_vm_impl(
     use crate::wasmtime_runner::wasmtime_runner::run_wasmtime;
     let (outcome, error) = match vm_kind {
         VMKind::Wasmer => run_wasmer(
-            code_hash,
+            &code_hash,
             code,
             method_name,
             ext,
@@ -141,7 +141,7 @@ fn run_vm_impl(
         ),
         #[cfg(feature = "wasmtime_vm")]
         VMKind::Wasmtime => run_wasmtime(
-            code_hash,
+            &code_hash,
             code,
             method_name,
             ext,
