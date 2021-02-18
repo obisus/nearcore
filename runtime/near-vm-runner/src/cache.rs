@@ -17,6 +17,9 @@ pub(crate) fn compile_module(
     code: &[u8],
     config: &VMConfig,
 ) -> Result<wasmer_runtime::Module, VMError> {
+    let span = tracing::info_span!("compile_module");
+    let _span = span.enter();
+
     let prepared_code = prepare::prepare_contract(code, config)?;
     wasmer_runtime::compile(&prepared_code).map_err(|err| err.into_vm_error())
 }
@@ -61,6 +64,9 @@ pub(crate) fn compile_and_serialize_wasmer(
     key: &CryptoHash,
     cache: &dyn CompiledContractCache,
 ) -> Result<wasmer_runtime::Module, VMError> {
+    let span = tracing::info_span!("compile_and_serialize_wasmer");
+    let _span = span.enter();
+
     let module = compile_module(wasm_code, config).map_err(|e| cache_error(e, &key, cache))?;
     let artifact =
         module.cache().map_err(|_e| VMError::CacheError(SerializationError { hash: (key.0).0 }))?;
@@ -78,6 +84,9 @@ pub(crate) fn compile_and_serialize_wasmer(
 fn deserialize_wasmer(
     serialized: &[u8],
 ) -> Result<Result<wasmer_runtime::Module, VMError>, CacheError> {
+    let span = tracing::info_span!("deserialize_wasmer");
+    let _span = span.enter();
+
     let record = CacheRecord::try_from_slice(serialized).map_err(|_e| DeserializationError)?;
     let serialized_artifact = match record {
         CacheRecord::Error(err) => return Ok(Err(err)),
@@ -100,6 +109,9 @@ fn compile_module_cached_wasmer_impl(
     config: &VMConfig,
     cache: Option<&dyn CompiledContractCache>,
 ) -> Result<wasmer_runtime::Module, VMError> {
+    let span = tracing::info_span!("compile_module_cached_wasmer_impl");
+    let _span = span.enter();
+
     if cache.is_none() {
         return compile_module(wasm_code, config);
     }
