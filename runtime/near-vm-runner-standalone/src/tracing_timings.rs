@@ -68,5 +68,8 @@ where
             reset = reset,
             width = level * 2
         );
+        if level == 0 {
+            eprintln!()
+        }
     }
 }
