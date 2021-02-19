@@ -30,26 +30,9 @@ pub fn run<'a>(
     promise_results: &'a [PromiseResult],
     current_protocol_version: ProtocolVersion,
     cache: Option<&'a dyn CompiledContractCache>,
-    #[cfg(feature = "costs_counting")] profile: Option<&ProfileData>,
+    profile: &ProfileData,
 ) -> (Option<VMOutcome>, Option<VMError>) {
-    #[cfg(feature = "costs_counting")]
-    if let Some(profile) = profile {
-        return run_vm_profiled(
-            code_hash,
-            code,
-            method_name,
-            ext,
-            context,
-            wasm_config,
-            fees_config,
-            promise_results,
-            VMKind::default(),
-            profile.clone(),
-            current_protocol_version,
-            cache,
-        );
-    }
-    run_vm(
+    run_vm_profiled(
         code_hash,
         code,
         method_name,
@@ -59,6 +42,7 @@ pub fn run<'a>(
         fees_config,
         promise_results,
         VMKind::default(),
+        profile.clone(),
         current_protocol_version,
         cache,
     )
@@ -85,6 +69,8 @@ pub fn run_vm<'a>(
     #[cfg(feature = "wasmer1_vm")]
     use crate::wasmer1_runner::run_wasmer1;
 
+    let profile = ProfileData::new_disabled();
+
     match vm_kind {
         #[cfg(feature = "wasmer0_vm")]
         VMKind::Wasmer0 => run_wasmer(
@@ -96,7 +82,7 @@ pub fn run_vm<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            None,
+            profile,
             current_protocol_version,
             cache,
         ),
@@ -112,7 +98,7 @@ pub fn run_vm<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            None,
+            profile,
             current_protocol_version,
             cache,
         ),
@@ -130,7 +116,7 @@ pub fn run_vm<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            None,
+            profile,
             current_protocol_version,
             cache,
         ),
@@ -172,7 +158,7 @@ pub fn run_vm_profiled<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            Some(profile.clone()),
+            profile.clone(),
             current_protocol_version,
             cache,
         ),
@@ -188,7 +174,7 @@ pub fn run_vm_profiled<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            Some(profile.clone()),
+            profile.clone(),
             current_protocol_version,
             cache,
         ),
@@ -206,7 +192,7 @@ pub fn run_vm_profiled<'a>(
             wasm_config,
             fees_config,
             promise_results,
-            Some(profile.clone()),
+            profile.clone(),
             current_protocol_version,
             cache,
         ),

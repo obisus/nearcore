@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use bencher::{benchmark_group, benchmark_main, Bencher};
 
+use borsh::de;
 use near_primitives::runtime::fees::RuntimeFeesConfig;
 use near_primitives::version::ProtocolVersion;
 use near_vm_errors::VMError;
@@ -79,7 +80,7 @@ fn pass_through(bench: &mut Bencher) {
             &promise_results,
             LATEST_PROTOCOL_VERSION,
             None,
-            None,
+            &Default::default(),
         );
         assert_run_result(result, 42);
     });
@@ -99,7 +100,7 @@ fn benchmark_fake_storage_8b_1000(bench: &mut Bencher) {
             &promise_results,
             LATEST_PROTOCOL_VERSION,
             None,
-            None,
+            &Default::default(),
         );
         assert_run_result(result, 999 * 1000 / 2);
     });
@@ -119,7 +120,7 @@ fn benchmark_fake_storage_10kib_1000(bench: &mut Bencher) {
             &promise_results,
             LATEST_PROTOCOL_VERSION,
             None,
-            None,
+            &Default::default(),
         );
         assert_run_result(result, 999 * 1000 / 2);
     });
@@ -139,7 +140,7 @@ fn sum_n_1000000(bench: &mut Bencher) {
             &promise_results,
             LATEST_PROTOCOL_VERSION,
             None,
-            None,
+            &Default::default(),
         );
         assert_run_result(result, (1000000 - 1) * 1000000 / 2);
     });
